@@ -15,12 +15,11 @@ let hallOfFame = [];
 let activePlayerCount = 0;
 
 io.on('connection', (socket) => {
-    console.log('Neuer Dame-Spieler: ' + socket.id);
+    console.log('Neuer Spieler: ' + socket.id);
 
-    // Hall of Fame & Status sofort senden
+    // Hall of Fame sofort senden
     socket.emit('updateHallOfFame', hallOfFame);
     
-    // Prüfen ob voll
     if (activePlayerCount >= 2) {
         socket.emit('spectator', true);
     }
@@ -31,7 +30,6 @@ io.on('connection', (socket) => {
         if (activePlayerCount >= 2) return;
 
         activePlayerCount++;
-        // Standard bei Dame: Weiß beginnt unten, Schwarz oben
         const assignedColor = activePlayerCount === 1 ? 'white' : 'black';
         
         players[socket.id] = { color: assignedColor, name: playerName };
@@ -41,21 +39,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('playerAction', (data) => {
-        // Leitet Züge an alle weiter
         io.emit('updateBoard', data);
     });
 
-    socket.on('reportWin', (winnerColor) => {
-        let winnerName = "Unbekannt";
-        for (let id in players) {
-            if (players[id].color === winnerColor) {
-                winnerName = players[id].name;
-                break;
-            }
-        }
-
+    // NEU: Akzeptiert jetzt direkt ein Objekt mit dem Namen
+    socket.on('reportWin', (data) => {
+        // data = { name: "SpielerName" }
         const entry = { 
-            name: winnerName, 
+            name: data.name, 
             time: new Date().toLocaleTimeString('de-DE', {
                 hour: '2-digit', 
                 minute:'2-digit', 
