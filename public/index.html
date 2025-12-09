@@ -279,7 +279,7 @@
         // --- START MODI ---
         function joinOnlineGame() {
             const name = nameInput.value.trim();
-            if (!name) return alert("Name?");
+            if (!name) return alert("Bitte Namen eingeben!");
             isSinglePlayer = false;
             socket.emit('joinGame', name);
             startOverlay.style.display = 'none';
@@ -355,7 +355,7 @@
         });
         socket.on('opponentLeft', () => { if(!isSinglePlayer) { alert("Gegner weg."); restartBtn.style.display = 'none'; gameActive = false; } });
 
-        // --- LOGIC ---
+        // --- GAME LOGIC ---
         function initGame() {
             board = Array(64).fill(null);
             for (let i = 0; i < 24; i++) if (isDarkSquare(i)) board[i] = { c: 'black', k: false };
@@ -474,7 +474,6 @@
                 }
                 selectedIndex = index;
                 validMoves = getMovesForPiece(index, board, false);
-                // Filter: Wenn Schlagzwang, nur Schläge erlauben
                 const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable(piece.c);
                 if (captureIsForced) {
                     validMoves = validMoves.filter(m => m.type === 'jump');
@@ -489,7 +488,6 @@
             }
         }
 
-        // Die neue mächtige Funktion für Dame & Bauern
         function getMovesForPiece(index, currentBoard, jumpsOnly) {
             let moves = [];
             const piece = currentBoard[index];
@@ -498,19 +496,13 @@
             const row = Math.floor(index / 8);
             const col = index % 8;
             
-            // Richtungen
             let dirs = [];
             if (piece.k) {
-                dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; // Dame: Alle Richtungen
+                dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; 
             } else {
-                // Bauer
-                if (piece.c === 'white') dirs = [[-1, -1], [-1, 1]]; // Weiß nach oben
-                else dirs = [[1, -1], [1, 1]]; // Schwarz nach unten
-                
-                // Bauern können rückwärts schlagen! Also fürs Schlagen alle Richtungen checken
-                if (jumpsOnly || hasGlobalCaptureAvailable(piece.c)) {
-                     dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
-                }
+                // HIER IST DER FIX: Bauern nur vorwärts bewegen
+                if (piece.c === 'white') dirs = [[-1, -1], [-1, 1]]; 
+                else dirs = [[1, -1], [1, 1]]; 
             }
 
             for (let d of dirs) {
@@ -523,61 +515,44 @@
                     const tCol = col + (cDir * dist);
                     const tIdx = tRow * 8 + tCol;
 
-                    if (tRow < 0 || tRow > 7 || tCol < 0 || tCol > 7) break; // Rand erreicht
+                    if (tRow < 0 || tRow > 7 || tCol < 0 || tCol > 7) break; 
 
                     const targetContent = currentBoard[tIdx];
 
-                    // --- FALL A: Leeres Feld ---
+                    // Leeres Feld
                     if (targetContent === null) {
                         if (!jumpsOnly && !piece.k && dist === 1) {
-                            // Bauer darf 1 Schritt auf leeres Feld
-                            // Aber nur in Laufrichtung! (Rückwärtszug nur beim Schlagen erlaubt)
-                            let isForward = false;
-                            if(piece.c === 'white' && rDir === -1) isForward = true;
-                            if(piece.c === 'black' && rDir === 1) isForward = true;
-                            
-                            if(isForward) moves.push({ target: tIdx, type: 'move' });
-                        }
-                        else if (!jumpsOnly && piece.k) {
-                            // Dame darf auf jedes leere Feld rutschen
                             moves.push({ target: tIdx, type: 'move' });
                         }
-                        
-                        // Wenn Dame, weiter scannen (rutschen)
+                        else if (!jumpsOnly && piece.k) {
+                            moves.push({ target: tIdx, type: 'move' });
+                        }
                         if (piece.k) { dist++; continue; }
-                        else break; // Bauer stoppt nach 1 Schritt
+                        else break; 
                     }
 
-                    // --- FALL B: Eigener Stein ---
-                    if (targetContent.c === piece.c) break; // Blockiert
+                    // Eigener Stein
+                    if (targetContent.c === piece.c) break; 
 
-                    // --- FALL C: Gegner (Möglicher Schlag) ---
+                    // Gegner (Schlag)
                     if (targetContent.c !== piece.c) {
-                        // Wir müssen schauen, ob dahinter Platz ist
-                        // Für Bauern: Genau 1 Feld dahinter
-                        // Für Dame: Jedes freie Feld dahinter
-                        
                         let jumpDist = 1;
                         while (true) {
                             const landRow = tRow + (rDir * jumpDist);
                             const landCol = tCol + (cDir * jumpDist);
                             const landIdx = landRow * 8 + landCol;
 
-                            if (landRow < 0 || landRow > 7 || landCol < 0 || landCol > 7) break; // Rand
+                            if (landRow < 0 || landRow > 7 || landCol < 0 || landCol > 7) break; 
                             
                             if (currentBoard[landIdx] === null) {
-                                // Treffer! Sprung möglich
                                 moves.push({ target: landIdx, type: 'jump', remove: tIdx });
-                                
-                                // Dame darf nach dem Gegner noch weiter rutschen
                                 if (piece.k) { jumpDist++; continue; }
-                                else break; // Bauer landet direkt dahinter
+                                else break; 
                             } else {
-                                // Feld hinter Gegner ist besetzt -> Kein Sprung
                                 break; 
                             }
                         }
-                        break; // Nach dem Gegner-Check brechen wir diese Richtung ab (man kann nicht 2 Gegner direkt hintereinander springen ohne Landung)
+                        break; 
                     }
                 }
             }
@@ -604,12 +579,9 @@
 
             if (move.type === 'jump') {
                 newBoard[move.remove] = null;
-                // Temporärer Board Check für Kettenzug
                 const oldBoard = board;
                 board = newBoard; 
-                
-                // Kann derselbe Stein nochmal schlagen?
-                // Wenn er Dame wurde, endet der Zug in den meisten Regeln sofort.
+                // Weiterschlagen? Nur wenn man nicht gerade zur Dame wurde
                 if (!becameKing && canPieceJump(move.target, newBoard)) {
                     nextForcedPiece = move.target;
                     nextPlayer = currentPlayer; 
