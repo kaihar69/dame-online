@@ -238,7 +238,7 @@
     <div id="footer-area">
         <button id="restart-btn" class="btn btn-restart" style="display:none;" onclick="handleRestart()">Neue Runde</button>
         <div id="hof-container">
-            <h3>🏆 Hall of Fame (Online) 🏆</h3>
+            <h3>🏆 Hall of Fame 🏆</h3>
             <ul id="hof-list"><li><span class="hof-name">...</span></li></ul>
         </div>
     </div>
@@ -263,6 +263,7 @@
         const scoreBlackDisplay = document.getElementById('score-black');
         const hofList = document.getElementById('hof-list');
 
+        // STATE
         let isSinglePlayer = false;
         let myColor = null; 
         let currentPlayer = 'white'; 
@@ -271,6 +272,9 @@
         let selectedIndex = null;
         let validMoves = []; 
         let forcedPieceIndex = null;
+        
+        // BOT STATE
+        let botLevel = parseInt(localStorage.getItem('dameBotLevel')) || 1; 
 
         // --- CONNECT ---
         socket.on('connect', () => { warningOverlay.style.display = 'none'; });
@@ -290,7 +294,7 @@
             isSinglePlayer = true;
             myColor = 'white';
             nameWhite.innerText = name;
-            nameBlack.innerText = "Computer 🤖";
+            nameBlack.innerText = `Computer (Lvl ${botLevel})`;
             startOverlay.style.display = 'none';
             roleElement.innerText = "Einzelspieler gegen Computer";
             adjustLayoutForMobile('white');
@@ -364,6 +368,10 @@
             gameActive = true;
             forcedPieceIndex = null;
             restartBtn.style.display = 'none';
+            
+            // Bot Name aktualisieren beim Reset
+            if(isSinglePlayer) nameBlack.innerText = `Computer (Lvl ${botLevel})`;
+            
             renderBoard();
             updateUI();
         }
@@ -442,8 +450,7 @@
             statusElement.style.color = color;
         }
 
-        // --- CORE LOGIC MIT FLIEGENDER DAME ---
-
+        // --- ZUG & SCHLAG ---
         function hasGlobalCaptureAvailable(player) {
             if (forcedPieceIndex !== null) return true;
             for (let i = 0; i < 64; i++) {
@@ -500,7 +507,7 @@
             if (piece.k) {
                 dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; 
             } else {
-                // HIER IST DER FIX: Bauern nur vorwärts bewegen
+                // Bauern nur vorwärts
                 if (piece.c === 'white') dirs = [[-1, -1], [-1, 1]]; 
                 else dirs = [[1, -1], [1, 1]]; 
             }
@@ -609,27 +616,81 @@
             }
         }
 
-        // --- BOT ---
+        // --- BOT LOGIC (Adaptive AI) ---
         function makeBotMove() {
             if (!gameActive || currentPlayer !== 'black') return;
             let blackStonesIndices = [];
             board.forEach((p, idx) => { if (p && p.c === 'black') blackStonesIndices.push(idx); });
+            
             let allPossibleMoves = [];
             if (forcedPieceIndex !== null) blackStonesIndices = [forcedPieceIndex];
             const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable('black');
 
+            // 1. Alle Züge sammeln
             blackStonesIndices.forEach(idx => {
                 let moves = getMovesForPiece(idx, board, false);
                 if (captureIsForced) moves = moves.filter(m => m.type === 'jump');
                 moves.forEach(m => { allPossibleMoves.push({ from: idx, move: m }); });
             });
 
-            if (allPossibleMoves.length === 0) return; 
-            const randomPick = allPossibleMoves[Math.floor(Math.random() * allPossibleMoves.length)];
-            selectedIndex = randomPick.from; 
-            executeMove(randomPick.move);
+            if (allPossibleMoves.length === 0) return; // checkWin
+
+            // 2. Bewertung (Scoring)
+            // Level 1: Random
+            // Level 2: Random + Vorzug für Schlagen (eh durch Regel)
+            // Level 3: Simpler "Bin ich danach sicher?" Check
+            
+            let bestMove = null;
+            let bestScore = -9999;
+
+            // Random shuffle um bei gleichem Score Abwechslung zu haben
+            allPossibleMoves.sort(() => Math.random() - 0.5);
+
+            for (let pm of allPossibleMoves) {
+                let score = 0;
+                
+                // Basis Score: Schlagen ist gut (passiert eh durch Regel, aber gut für Bewertung)
+                if (pm.move.type === 'jump') score += 100;
+
+                // Dame werden
+                const targetRow = Math.floor(pm.move.target / 8);
+                const piece = board[pm.from];
+                if (!piece.k && targetRow === 7) score += 50; // Bot will Dame werden
+
+                // Level 3+ Check: Werde ich danach geschlagen?
+                if (botLevel >= 3) {
+                    // Simuliere Zug
+                    const tempBoard = [...board];
+                    tempBoard[pm.move.target] = tempBoard[pm.from];
+                    tempBoard[pm.from] = null;
+                    if(pm.move.remove !== undefined) tempBoard[pm.move.remove] = null;
+
+                    // Prüfe, ob Weiß jetzt schlagen kann (einfacher Check)
+                    // Wir checken nur, ob IRGENDWER von Weiß jetzt schlagen kann
+                    // (Perfekt wäre zu prüfen, ob genau MEIN Stein geschlagen wird, aber global reicht)
+                    let whiteCanCapture = false;
+                    for(let i=0; i<64; i++) {
+                        if(tempBoard[i] && tempBoard[i].c === 'white') {
+                            if(canPieceJump(i, tempBoard)) { whiteCanCapture = true; break; }
+                        }
+                    }
+                    if (whiteCanCapture) score -= 200; // Schlecht!
+                }
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = pm;
+                }
+            }
+
+            // Fallback für Level 1 oder wenn alles gleich schlecht ist
+            if (!bestMove) bestMove = allPossibleMoves[0];
+
+            selectedIndex = bestMove.from; 
+            executeMove(bestMove.move);
         }
 
+        // --- ENDE ---
         function checkWin() {
             const whitePieces = board.filter(p => p && p.c === 'white').length;
             const blackPieces = board.filter(p => p && p.c === 'black').length;
@@ -641,8 +702,30 @@
             gameActive = false;
             statusElement.innerText = "SIEGER: " + winner.toUpperCase();
             restartBtn.style.display = 'block';
-            if (!isSinglePlayer && ((winner === 'Weiß' && myColor === 'white') || (winner === 'Schwarz' && myColor === 'black'))) {
-                socket.emit('reportWin', myColor);
+            
+            // Hall of Fame Eintrag senden
+            let winnerName = null;
+            if (isSinglePlayer) {
+                if (winner === 'Weiß') {
+                    winnerName = nameWhite.innerText;
+                    // Level Up
+                    if(botLevel < 5) botLevel++;
+                    localStorage.setItem('dameBotLevel', botLevel);
+                    alert("Gewonnen! Bot Level jetzt " + botLevel);
+                } else {
+                    winnerName = "Computer (Lvl " + botLevel + ")";
+                    // Level Down
+                    if(botLevel > 1) botLevel--;
+                    localStorage.setItem('dameBotLevel', botLevel);
+                    alert("Verloren. Bot Level jetzt " + botLevel);
+                }
+                // Sende Ergebnis an Server
+                socket.emit('reportWin', { name: winnerName });
+                
+            } else {
+                // Online Multiplayer
+                if (myColor === 'white' && winner === 'Weiß') socket.emit('reportWin', { name: nameWhite.innerText });
+                if (myColor === 'black' && winner === 'Schwarz') socket.emit('reportWin', { name: nameBlack.innerText });
             }
         }
 
