@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mühle - Bot Edition</title>
+    <title>Dame Online</title>
     <style>
         /* GLOBAL RESET */
         *, *::before, *::after { box-sizing: border-box; }
 
         :root {
             --bg-color: #2c3e50;
-            --board-color: #d3a968;
+            --board-light: #eecfa1;
+            --board-dark: #8b4513;
             --border-color: #5d4037;
             --highlight: #f1c40f;
             --stone-size: 40px; 
@@ -30,7 +31,7 @@
             user-select: none;
             touch-action: manipulation; 
             overflow-x: hidden;
-            padding: 10px 0;
+            padding: 20px 0;
         }
 
         /* HEADER */
@@ -38,7 +39,7 @@
             text-align: center;
             width: 100%;
             pointer-events: none; 
-            margin-bottom: 10px;
+            margin-bottom: 20px;
             position: relative;
             z-index: 50;
         }
@@ -54,31 +55,43 @@
             gap: 40px;
             width: 100%;
             max-width: 900px;
-            /* Flex-Wrap erlaubt das Umbrechen auf Mobile */
-            flex-wrap: wrap; 
+            flex-wrap: wrap;
         }
 
-        /* DAS BRETT */
+        /* DAS BRETT (Quadratisch & Stabil) */
         #board {
             width: 500px;
             height: 500px;
-            background-color: var(--board-color);
-            position: relative;
+            background-color: var(--border-color);
             border: 15px solid var(--border-color);
             border-radius: 5px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
             
-            /* Stabilität: Quadratisch bleiben */
             flex-shrink: 0; 
             aspect-ratio: 1 / 1; 
             
             z-index: 10;
-            /* Standard-Ordnung für Desktop (Mitte) */
-            order: 2; 
+            order: 2; /* Desktop: Mitte */
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
         }
 
-        svg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
-        line, rect { stroke: #000; stroke-width: 4; fill: none; }
+        .square {
+            width: 100%; height: 100%; position: relative;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .square.light { background-color: var(--board-light); }
+        .square.dark { background-color: var(--board-dark); cursor: pointer; }
+        
+        .square.valid-move::after {
+            content: ''; width: 15px; height: 15px;
+            background-color: rgba(46, 204, 113, 0.7);
+            border-radius: 50%; position: absolute; box-shadow: 0 0 5px #2ecc71;
+        }
+        .square.valid-move.capture-move::after {
+            background-color: rgba(231, 76, 60, 0.8); box-shadow: 0 0 5px #e74c3c;
+        }
 
         /* PANELS */
         .side-panel {
@@ -95,9 +108,8 @@
             align-items: center;
         }
         
-        /* Standard Desktop Ordnung */
-        #panel-white { order: 1; } /* Links */
-        #panel-black { order: 3; } /* Rechts */
+        #panel-white { order: 1; }
+        #panel-black { order: 3; }
 
         .side-panel.active {
             border-color: var(--highlight);
@@ -106,45 +118,32 @@
             opacity: 1; transform: scale(1.05);
         }
         .player-name { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; display: block; word-wrap: break-word;}
-        
-        .stone-supply {
-            display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; min-height: 40px; width: 100%;
-        }
-        .supply-stone {
-            width: 20px; height: 20px; border-radius: 50%; box-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .supply-stone.white { background: radial-gradient(circle at 30% 30%, #fff, #bbb); border: 1px solid #888; }
-        .supply-stone.black { background: radial-gradient(circle at 30% 30%, #444, #000); border: 1px solid #000; }
+        .captured-count { font-size: 2rem; font-weight: bold; color: #aaa; margin-top: 5px; }
+        .captured-label { font-size: 0.8rem; color: #bdc3c7; }
 
-        /* STEINE & SPOTS */
-        .spot {
-            width: 30px; height: 30px; background-color: rgba(0,0,0,0.2);
-            border-radius: 50%; position: absolute; transform: translate(-50%, -50%); cursor: pointer; z-index: 10;
-        }
-        /* Vergrößerte Klickfläche */
-        .spot::after { content: ''; position: absolute; top: -15px; left: -15px; right: -15px; bottom: -15px; }
-        .spot:hover { background-color: rgba(0,0,0,0.5); }
-
+        /* STEINE */
         .stone {
-            width: var(--stone-size); height: var(--stone-size); border-radius: 50%;
-            position: absolute; transform: translate(-50%, -50%); z-index: 20;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.5); pointer-events: none; 
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            width: 80%; height: 80%; border-radius: 50%; z-index: 20;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            transition: all 0.2s ease; position: relative;
         }
         .stone.white { background: radial-gradient(circle at 30% 30%, #fff, #bbb); border: 1px solid #888; }
         .stone.black { background: radial-gradient(circle at 30% 30%, #444, #000); border: 1px solid #000; }
-        .stone.selected { box-shadow: 0 0 20px 8px #3498db; transform: translate(-50%, -50%) scale(1.15); z-index: 30;}
-
-        body.removing .spot { cursor: not-allowed; } 
-        body.game-over #board { opacity: 0.7; pointer-events: none; filter: grayscale(80%); }
-        body.game-over #status { color: #2ecc71; font-size: 1.5rem; animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        
+        .stone.selected { box-shadow: 0 0 15px 5px #3498db; transform: scale(1.1); }
+        .stone.must-capture { box-shadow: 0 0 15px 5px #e74c3c; animation: pulse-red 1s infinite; }
+        @keyframes pulse-red { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        .stone.king::after {
+            content: '👑'; font-size: 1.5rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        }
 
         /* FOOTER & OVERLAYS */
         #footer-area { margin-top: 10px; text-align: center; width: 100%; display: flex; flex-direction: column; align-items: center; }
         
         #hof-container {
-            width: 90%; max-width: 400px; background: rgba(0,0,0,0.3); border-radius: 10px; padding: 10px; font-size: 0.9rem; margin-top: 10px;
+            width: 90%; max-width: 400px; background: rgba(0,0,0,0.3);
+            border-radius: 10px; padding: 10px; font-size: 0.9rem; margin-top: 10px;
         }
         #hof-container h3 { color: #f1c40f; margin: 0 0 10px 0; border-bottom: 1px solid #555; padding-bottom: 5px; font-size: 1rem;}
         #hof-list { list-style: none; padding: 0; margin: 0; max-height: 100px; overflow-y: auto; }
@@ -164,58 +163,45 @@
         .box h2 { margin-top: 0; color: #f1c40f; font-size: 1.5rem;}
         
         input[type="text"] {
-            padding: 12px; font-size: 1.1rem; width: 90%; margin-bottom: 15px; border-radius: 5px; border: none;
-            text-align: center; background: #ecf0f1; color: #2c3e50; font-weight: bold;
+            padding: 12px; font-size: 1.1rem; width: 90%; margin-bottom: 15px;
+            border-radius: 5px; border: none; text-align: center;
+            background: #ecf0f1; color: #2c3e50; font-weight: bold;
         }
         .btn { padding: 12px 25px; font-size: 1.1rem; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; background: #2ecc71; color: white; margin-top: 5px; width: 100%; transition: transform 0.1s;}
         .btn:active { transform: scale(0.98); }
         .btn-blue { background: #3498db; margin-top: 15px; }
         .btn-restart { background: #e74c3c; width: 200px; margin-bottom: 15px;}
 
-        /* MOBILE LAYOUT & ZENTRIERUNG */
+        /* MOBILE LAYOUT */
         @media (max-width: 900px) {
             body { justify-content: flex-start; padding-top: 5px; }
             #header-area { margin-bottom: 10px; }
-            
-            #main-stage {
-                flex-direction: column; /* Stapeln */
-                gap: 15px;
-            }
-
+            #main-stage { flexDirection: column; gap: 15px; }
             h1 { font-size: 1.2rem; } #status { font-size: 1rem; }
-
-            /* Das Brett: Stabil und Quadratisch */
+            
             #board { 
-                width: 90vw; /* Sicherheitsabstand zum Rand */
+                width: 90vw; 
                 max-width: 450px; 
                 aspect-ratio: 1 / 1; 
                 height: auto; 
                 border-width: 10px; 
-                order: 2; /* Brett immer in der Mitte */
+                order: 2; 
             }
             
-            /* Panels */
             .side-panel { 
-                width: 90%; /* Fast volle Breite auf Mobile für bessere Sichtbarkeit */
-                max-width: 450px;
-                padding: 10px; 
-                display: flex;
-                flex-direction: row; /* Steine neben Name */
-                justify-content: space-between;
-                align-items: center;
-                min-height: 60px;
+                order: 2; width: 40%; padding: 10px; 
+                display: inline-flex; min-height: 80px; 
+                flex-direction: row; justify-content: space-between;
             }
-            .stone-supply { width: auto; min-height: 0; gap: 3px; }
+            .captured-count { margin: 0; font-size: 1.5rem;}
+            .captured-label { display: none; }
             
-            /* HIER IST DIE MAGIE: Spieler immer unten */
-            /* Default Mobile Order (wird von JS überschrieben) */
-            /* Oben (Gegner) -> Order 1 */
-            /* Mitte (Brett) -> Order 2 */
-            /* Unten (Ich)   -> Order 3 */
-
+            #main-stage { flexDirection: row; flex-wrap: wrap; alignItems: flex-start; }
+            #board { flex-basis: 100%; } 
+            .side-panel { width: 42%; flex-grow: 1; max-width: 200px; }
             .stone { width: 8.5vw; height: 8.5vw; max-width: 38px; max-height: 38px; }
-            .spot { width: 8vw; height: 8vw; max-width: 35px; max-height: 35px; }
             .btn-restart { width: 90%; }
+            .stone.king::after { font-size: 1.2rem; }
         }
     </style>
 </head>
@@ -224,48 +210,39 @@
     <div id="connection-warning" class="overlay" style="display:none; z-index: 2000;">
         <div class="box" style="border-color: #e74c3c;">
             <h2 style="color: #e74c3c;">Keine Verbindung</h2>
-            <p>Server antwortet nicht.</p>
             <button class="btn btn-restart" onclick="location.reload()">Neu laden</button>
         </div>
     </div>
 
     <div id="start-overlay" class="overlay">
         <div class="box">
-            <h2>Mühle Online</h2>
+            <h2>Dame Online</h2>
             <p>Dein Spielername:</p>
-            <input type="text" id="player-name-input" placeholder="Name" maxlength="10">
+            <input type="text" id="player-name-input" placeholder="Name eingeben" maxlength="10">
             <button class="btn" onclick="joinOnlineGame()">Online Spielen</button>
             <button class="btn btn-blue" onclick="startBotGame()">Gegen Computer</button>
         </div>
     </div>
 
     <div id="header-area">
-        <h1>Mühle</h1>
+        <h1>Dame</h1>
         <div id="my-role">Modus wählen</div>
-        <div id="status">Lade...</div>
+        <div id="status">Warte...</div>
     </div>
     
     <div id="main-stage">
         <div id="panel-white" class="side-panel">
             <span class="player-name" id="name-white">Weiß</span>
-            <div id="supply-white" class="stone-supply"></div>
+            <div class="captured-count" id="score-white">0</div>
+            <div class="captured-label">Gegner geschlagen</div>
         </div>
 
-        <div id="board">
-            <svg>
-                <rect x="10%" y="10%" width="80%" height="80%"/>
-                <rect x="25%" y="25%" width="50%" height="50%"/>
-                <rect x="40%" y="40%" width="20%" height="20%"/>
-                <line x1="50%" y1="10%" x2="50%" y2="40%" />
-                <line x1="50%" y1="60%" x2="50%" y2="90%" />
-                <line x1="10%" y1="50%" x2="40%" y2="50%" />
-                <line x1="60%" y1="50%" x2="90%" y2="50%" />
-            </svg>
-        </div>
+        <div id="board"></div>
 
         <div id="panel-black" class="side-panel">
             <span class="player-name" id="name-black">Schwarz</span>
-            <div id="supply-black" class="stone-supply"></div>
+            <div class="captured-count" id="score-black">0</div>
+            <div class="captured-label">Gegner geschlagen</div>
         </div>
     </div>
 
@@ -294,49 +271,21 @@
         const panelBlack = document.getElementById('panel-black');
         const nameWhite = document.getElementById('name-white');
         const nameBlack = document.getElementById('name-black');
-        const supplyWhite = document.getElementById('supply-white');
-        const supplyBlack = document.getElementById('supply-black');
+        const scoreWhiteDisplay = document.getElementById('score-white');
+        const scoreBlackDisplay = document.getElementById('score-black');
         const hofList = document.getElementById('hof-list');
 
-        // GAME STATE
+        // STATE
         let isSinglePlayer = false;
         let myColor = null; 
-        let currentPlayer = null; 
-        let piecesPlaced = { white: 0, black: 0 };
-        const maxPieces = 9;
-        
-        let gameState = 'waiting'; 
-        let selectedStoneIndex = null;
-        let boardState = Array(24).fill(null);
+        let currentPlayer = 'white'; 
+        let gameActive = false;
+        let board = Array(64).fill(null);
+        let selectedIndex = null;
+        let validMoves = []; 
+        let forcedPieceIndex = null;
 
-        // BOT STATE (Level 1-5)
-        let botLevel = parseInt(localStorage.getItem('muehleBotLevel')) || 1; 
-
-        const coordinates = [
-            {t: 10, l: 10}, {t: 10, l: 50}, {t: 10, l: 90}, {t: 50, l: 90}, 
-            {t: 90, l: 90}, {t: 90, l: 50}, {t: 90, l: 10}, {t: 50, l: 10},
-            {t: 25, l: 25}, {t: 25, l: 50}, {t: 25, l: 75}, {t: 50, l: 75}, 
-            {t: 75, l: 75}, {t: 75, l: 50}, {t: 75, l: 25}, {t: 50, l: 25},
-            {t: 40, l: 40}, {t: 40, l: 50}, {t: 40, l: 60}, {t: 50, l: 60}, 
-            {t: 60, l: 60}, {t: 60, l: 50}, {t: 60, l: 40}, {t: 50, l: 40}
-        ];
-
-        const adjacencyMap = {
-            0: [1, 7], 1: [0, 2, 9], 2: [1, 3], 3: [2, 4, 11], 4: [3, 5], 5: [4, 6, 13],
-            6: [5, 7], 7: [0, 6, 15], 8: [9, 15], 9: [1, 8, 10, 17], 10: [9, 11],
-            11: [3, 10, 12, 19], 12: [11, 13], 13: [5, 12, 14, 21], 14: [13, 15], 15: [7, 8, 14, 23],
-            16: [17, 23], 17: [9, 16, 18], 18: [17, 19], 19: [11, 18, 20], 20: [19, 21], 21: [13, 20, 22],
-            22: [21, 23], 23: [15, 16, 22]
-        };
-
-        const millCombinations = [
-            [0, 1, 2], [2, 3, 4], [4, 5, 6], [6, 7, 0], 
-            [8, 9, 10], [10, 11, 12], [12, 13, 14], [14, 15, 8], 
-            [16, 17, 18], [18, 19, 20], [20, 21, 22], [22, 23, 16], 
-            [1, 9, 17], [3, 11, 19], [5, 13, 21], [7, 15, 23] 
-        ];
-
-        // --- VERBINDUNG ---
+        // --- CONNECT ---
         socket.on('connect', () => { warningOverlay.style.display = 'none'; });
         socket.on('disconnect', () => { warningOverlay.style.display = 'flex'; });
 
@@ -353,61 +302,50 @@
             const name = nameInput.value.trim() || "Spieler";
             isSinglePlayer = true;
             myColor = 'white';
-            roleElement.innerText = `Bot Level ${botLevel}: Er lernt von dir!`;
             nameWhite.innerText = name;
-            nameBlack.innerText = `Bot (Lvl ${botLevel})`;
+            nameBlack.innerText = "Computer 🤖";
             startOverlay.style.display = 'none';
-            // Layout Update für Singleplayer (Ich bin Weiß)
+            roleElement.innerText = "Einzelspieler gegen Computer";
             adjustLayoutForMobile('white');
-            resetLocalBoard();
-            startGameLocal('white');
+            initGame();
         }
 
         function handleRestart() {
-            if (isSinglePlayer) {
-                resetLocalBoard();
-                startGameLocal('white');
-            } else {
-                socket.emit('gameStart', 'white');
-            }
+            if (isSinglePlayer) initGame();
+            else socket.emit('gameStart', 'white');
         }
 
-        // --- LAYOUT HELFER (Der Trick für "Unten Spielen") ---
+        // --- LAYOUT HELFER (Spieler unten) ---
         function adjustLayoutForMobile(myColorRole) {
-            // Nur auf Mobile anwenden (Screen < 900px)
             if (window.innerWidth > 900) return;
-
-            // Brett ist immer Order 2
-            // Ich will unten sein (Order 3)
-            // Gegner will oben sein (Order 1)
-
             if (myColorRole === 'white') {
-                panelWhite.style.order = '3'; // Ich (Weiß) nach unten
-                panelBlack.style.order = '1'; // Gegner (Schwarz) nach oben
+                panelWhite.style.order = '3'; panelBlack.style.order = '1';
             } else if (myColorRole === 'black') {
-                panelBlack.style.order = '3'; // Ich (Schwarz) nach unten
-                panelWhite.style.order = '1'; // Gegner (Weiß) nach oben
+                panelBlack.style.order = '3'; panelWhite.style.order = '1';
             } else {
-                // Zuschauer / Default
-                panelWhite.style.order = '3';
-                panelBlack.style.order = '1';
+                panelWhite.style.order = '3'; panelBlack.style.order = '1';
             }
         }
 
-        // --- SOCKET LISTENER ---
+        // --- SOCKETS ---
         socket.on('player-assignment', (data) => {
             if(isSinglePlayer) return;
             myColor = data.color;
             roleElement.innerText = `Du bist: ${data.name} (${data.color === 'white' ? 'WEISS' : 'SCHWARZ'})`;
-            // Layout anpassen!
             adjustLayoutForMobile(myColor);
         });
-        socket.on('spectator', () => { if(!isSinglePlayer) { myColor = 'spectator'; roleElement.innerText = "Zuschauer"; startOverlay.style.display = 'none'; adjustLayoutForMobile('spectator'); } });
+        socket.on('spectator', () => {
+            if(isSinglePlayer) return;
+            myColor = 'spectator';
+            roleElement.innerText = "Zuschauer";
+            startOverlay.style.display = 'none';
+            adjustLayoutForMobile('spectator');
+        });
         socket.on('updatePlayerNames', (players) => {
             if(isSinglePlayer) return;
             nameWhite.innerText = "-"; nameBlack.innerText = "-";
             players.forEach(p => { if (p.color === 'white') nameWhite.innerText = p.name; if (p.color === 'black') nameBlack.innerText = p.name; });
-            if (players.length === 2 && gameState === 'waiting') startGameLocal('white'); 
+            if (players.length === 2 && !gameActive) socket.emit('gameStart', 'white');
         });
         socket.on('updateHallOfFame', (list) => {
             hofList.innerHTML = '';
@@ -418,366 +356,324 @@
                 hofList.appendChild(li);
             });
         });
-        socket.on('resetGame', (startColor) => { if(!isSinglePlayer) { resetLocalBoard(); startGameLocal(startColor); } });
+        socket.on('resetGame', () => { if(!isSinglePlayer) initGame(); });
         socket.on('updateBoard', (data) => {
             if(!isSinglePlayer) {
-                if (data.type === 'place') performPlaceStone(data.index, data.player);
-                else if (data.type === 'move') performMoveStone(data.fromIndex, data.index, data.player);
-                else if (data.type === 'remove') performRemoveStone(data.index, data.player);
+                board = data.board;
+                currentPlayer = data.nextPlayer;
+                forcedPieceIndex = data.forcedPiece !== undefined ? data.forcedPiece : null;
+                updateUI();
+                checkWin();
             }
         });
-        socket.on('opponentLeft', () => { if(!isSinglePlayer) { alert("Gegner weg."); gameState = 'waiting'; restartBtn.style.display = 'none'; } });
+        socket.on('opponentLeft', () => { if(!isSinglePlayer) { alert("Gegner weg."); restartBtn.style.display = 'none'; gameActive = false; } });
 
-        // --- INIT ---
-        function initBoard() {
-            coordinates.forEach((pos, index) => {
-                const spot = document.createElement('div'); spot.classList.add('spot'); spot.style.top = pos.t + '%'; spot.style.left = pos.l + '%'; spot.dataset.index = index; 
-                spot.addEventListener('click', handleSpotClick);
-                spot.addEventListener('touchstart', (e) => { e.preventDefault(); handleSpotClick(e); }, {passive: false});
-                boardElement.appendChild(spot);
-            });
-            fillSupply();
-        }
-
-        function fillSupply() {
-            supplyWhite.innerHTML = ''; supplyBlack.innerHTML = '';
-            for(let i=0; i<9; i++) {
-                const sW = document.createElement('div'); sW.classList.add('supply-stone', 'white'); supplyWhite.appendChild(sW);
-                const sB = document.createElement('div'); sB.classList.add('supply-stone', 'black'); supplyBlack.appendChild(sB);
-            }
-        }
-
-        function resetLocalBoard() {
-            boardState = Array(24).fill(null);
-            piecesPlaced = { white: 0, black: 0 };
-            document.querySelectorAll('.stone').forEach(el => el.remove());
-            fillSupply();
-            document.body.classList.remove('game-over', 'removing');
-            selectedStoneIndex = null;
+        // --- GAME LOGIC ---
+        function initGame() {
+            board = Array(64).fill(null);
+            for (let i = 0; i < 24; i++) if (isDarkSquare(i)) board[i] = { c: 'black', k: false };
+            for (let i = 40; i < 64; i++) if (isDarkSquare(i)) board[i] = { c: 'white', k: false };
+            currentPlayer = 'white';
+            gameActive = true;
+            forcedPieceIndex = null;
             restartBtn.style.display = 'none';
-        }
-
-        function startGameLocal(startColor) {
-            currentPlayer = startColor;
-            gameState = 'placing';
+            renderBoard();
             updateUI();
         }
 
-        function emitGameStart() { socket.emit('gameStart', 'white'); }
+        function isDarkSquare(i) {
+            const row = Math.floor(i / 8);
+            const col = i % 8;
+            return (row % 2 === 0 && col % 2 !== 0) || (row % 2 !== 0 && col % 2 === 0);
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            const captureIsForced = hasGlobalCaptureAvailable(currentPlayer);
+
+            board.forEach((piece, index) => {
+                const square = document.createElement('div');
+                square.classList.add('square');
+                square.classList.add(isDarkSquare(index) ? 'dark' : 'light');
+                square.dataset.index = index;
+                square.onclick = () => handleSquareClick(index);
+                
+                if (piece) {
+                    const stone = document.createElement('div');
+                    stone.classList.add('stone', piece.c);
+                    if (piece.k) stone.classList.add('king');
+                    if (index === selectedIndex) stone.classList.add('selected');
+                    
+                    if (currentPlayer === myColor || isSinglePlayer) {
+                        if (captureIsForced && canPieceJump(index, board)) stone.classList.add('must-capture');
+                        if (forcedPieceIndex !== null && index === forcedPieceIndex) stone.classList.add('must-capture');
+                    }
+                    square.appendChild(stone);
+                }
+
+                if (validMoves.some(m => m.target === index)) {
+                    square.classList.add('valid-move');
+                    const move = validMoves.find(m => m.target === index);
+                    if(move && move.type === 'jump') square.classList.add('capture-move');
+                }
+                boardElement.appendChild(square);
+            });
+            updateScore();
+        }
+
+        function updateScore() {
+            let w = 0, b = 0;
+            board.forEach(p => { if(p && p.c === 'white') w++; if(p && p.c === 'black') b++; });
+            scoreWhiteDisplay.innerText = 12 - b;
+            scoreBlackDisplay.innerText = 12 - w;
+        }
 
         function updateUI() {
+            renderBoard();
             if (currentPlayer === 'white') { panelWhite.classList.add('active'); panelBlack.classList.remove('active'); } 
             else { panelWhite.classList.remove('active'); panelBlack.classList.add('active'); }
 
-            const allPlaced = piecesPlaced.white === 9 && piecesPlaced.black === 9;
-            const stonesCount = countLiveStones(currentPlayer);
-            let phaseText = 'Setzen';
-            if (allPlaced) {
-                if (stonesCount === 3) phaseText = 'SPRINGEN!';
-                else phaseText = 'Schieben';
-            }
-
-            if (gameState === 'waiting') {
-                statusElement.innerText = "Warte auf Gegner...";
-                statusElement.style.color = "#f1c40f";
-                return;
-            }
+            let statusText = "";
+            let color = "#fff";
 
             if (isSinglePlayer) {
                 if (currentPlayer === 'white') {
-                    statusElement.innerText = `DU bist am Zug (${phaseText})`; statusElement.style.color = "#2ecc71";
+                    statusText = forcedPieceIndex !== null ? "WEITER SCHLAGEN!" : "Du bist am Zug";
+                    color = forcedPieceIndex !== null ? "#e74c3c" : "#2ecc71";
                 } else {
-                    statusElement.innerText = `Computer denkt... (${phaseText})`; statusElement.style.color = "#f1c40f";
+                    statusText = "Computer denkt nach..."; color = "#f1c40f";
                 }
             } else {
-                if (myColor === currentPlayer) { statusElement.innerText = `DU bist am Zug (${phaseText})`; statusElement.style.color = "#2ecc71"; } 
-                else { statusElement.innerText = `Gegner ist am Zug (${phaseText})`; statusElement.style.color = "#f1c40f"; }
-            }
-        }
-
-        // --- USER INPUT ---
-        function handleSpotClick(e) {
-            if (gameState === 'waiting' || gameState === 'game_over') return;
-            if (isSinglePlayer && currentPlayer !== 'white') return;
-            if (!isSinglePlayer && myColor !== currentPlayer) return;
-
-            const target = e.target.closest('.spot');
-            if(!target) return;
-            const index = parseInt(target.dataset.index);
-
-            if (gameState === 'removing') {
-                validateAndSendRemove(index);
-                return;
-            }
-
-            if (gameState === 'placing') {
-                if (boardState[index] !== null) return; 
-                if (!isSinglePlayer) socket.emit('playerAction', { type: 'place', index: index, player: myColor });
-                else performPlaceStone(index, 'white');
-            }
-
-            else if (gameState === 'moving') {
-                handleLocalMoveInput(index);
-            }
-        }
-
-        function handleLocalMoveInput(index) {
-            const playerColor = isSinglePlayer ? 'white' : myColor;
-            const clickedContent = boardState[index];
-            if (clickedContent === playerColor) {
-                selectStone(index);
-            } 
-            else if (clickedContent === null && selectedStoneIndex !== null) {
-                const currentStoneCount = countLiveStones(playerColor);
-                let validMove = false;
-                if (currentStoneCount === 3) validMove = true; 
-                else if (adjacencyMap[selectedStoneIndex].includes(index)) validMove = true; 
-
-                if (validMove) {
-                    if (!isSinglePlayer) socket.emit('playerAction', { type: 'move', fromIndex: selectedStoneIndex, index: index, player: myColor });
-                    else performMoveStone(selectedStoneIndex, index, 'white');
-                    
-                    const oldSelection = document.querySelector('.stone.selected');
-                    if (oldSelection) oldSelection.classList.remove('selected');
-                    selectedStoneIndex = null;
-                }
-            }
-        }
-
-        function validateAndSendRemove(index) {
-            const playerColor = isSinglePlayer ? 'white' : myColor;
-            const content = boardState[index];
-            const opponent = playerColor === 'white' ? 'black' : 'white';
-            if (content !== opponent) return alert("Gegnerstein wählen!");
-
-            if (checkForMill(index, opponent)) {
-                const allOpponentIndices = [];
-                boardState.forEach((val, idx) => { if (val === opponent) allOpponentIndices.push(idx); });
-                const allProtected = allOpponentIndices.every(idx => checkForMill(idx, opponent));
-                if (!allProtected) return alert("Geschützt durch Mühle!");
-            }
-            if (!isSinglePlayer) socket.emit('playerAction', { type: 'remove', index: index, player: myColor });
-            else performRemoveStone(index, 'white');
-        }
-
-        // --- ACTIONS ---
-        function performPlaceStone(index, player) {
-            boardState[index] = player;
-            piecesPlaced[player]++;
-            createStoneElement(index, player);
-            const supplyContainer = player === 'white' ? supplyWhite : supplyBlack;
-            if (supplyContainer.lastElementChild) supplyContainer.removeChild(supplyContainer.lastElementChild);
-            checkAfterAction(index, player);
-        }
-
-        function performMoveStone(fromIndex, toIndex, player) {
-            boardState[toIndex] = player;
-            boardState[fromIndex] = null;
-            const fromSpot = document.querySelector(`.spot[data-index='${fromIndex}']`);
-            const targetSpot = document.querySelector(`.spot[data-index='${toIndex}']`);
-            const allStones = document.querySelectorAll('.stone');
-            let moved = false;
-            allStones.forEach(stone => {
-                if(!moved && stone.style.top === fromSpot.style.top && stone.style.left === fromSpot.style.left) {
-                    stone.style.top = targetSpot.style.top;
-                    stone.style.left = targetSpot.style.left;
-                    moved = true;
-                }
-            });
-            checkAfterAction(toIndex, player);
-        }
-
-        function performRemoveStone(index, playerWhoRemoved) {
-            boardState[index] = null;
-            const spot = document.querySelector(`.spot[data-index='${index}']`);
-            const allStones = document.querySelectorAll('.stone');
-            allStones.forEach(stone => {
-                if(stone.style.top === spot.style.top && stone.style.left === spot.style.left) stone.remove();
-            });
-            document.body.classList.remove('removing');
-            
-            const whiteDone = piecesPlaced.white === maxPieces;
-            const blackDone = piecesPlaced.black === maxPieces;
-            gameState = (whiteDone && blackDone) ? 'moving' : 'placing';
-            switchPlayer();
-        }
-
-        function checkAfterAction(index, player) {
-            if (checkForMill(index, player)) {
-                gameState = 'removing';
-                if (isSinglePlayer) {
-                    if (player === 'white') {
-                        statusElement.innerText = "MÜHLE! Du darfst entfernen!"; statusElement.style.color = "#e74c3c"; document.body.classList.add('removing');
-                    } else {
-                        statusElement.innerText = "Bot hat Mühle und entfernt..."; statusElement.style.color = "#e74c3c";
-                        setTimeout(botRemoveStone, 1000);
-                    }
+                if (myColor === currentPlayer) {
+                    statusText = forcedPieceIndex !== null ? "WEITER SCHLAGEN!" : "Du bist am Zug";
+                    color = forcedPieceIndex !== null ? "#e74c3c" : "#2ecc71";
                 } else {
-                    if (player === myColor) {
-                        statusElement.innerText = "MÜHLE! Du darfst entfernen!"; statusElement.style.color = "#e74c3c"; document.body.classList.add('removing');
-                    } else {
-                        statusElement.innerText = "Gegner hat Mühle..."; statusElement.style.color = "#e74c3c";
-                    }
-                }
-            } else {
-                switchPlayer();
-            }
-        }
-
-        // --- BOT LOGIK ---
-        function botTurn() {
-            if (!isSinglePlayer || gameState === 'game_over') return;
-            setTimeout(() => {
-                if (gameState === 'placing') botPlace();
-                else if (gameState === 'moving') botMove();
-            }, 800);
-        }
-
-        function botPlace() {
-            let bestMove = -1;
-            if (botLevel >= 2) bestMove = findMillMove('black');
-            if (bestMove === -1 && botLevel >= 2) bestMove = findMillMove('white');
-            if (bestMove === -1) {
-                let emptySpots = [];
-                boardState.forEach((v, i) => { if (v === null) emptySpots.push(i); });
-                if (emptySpots.length > 0) bestMove = emptySpots[Math.floor(Math.random() * emptySpots.length)];
-            }
-            if (bestMove !== -1) performPlaceStone(bestMove, 'black');
-        }
-
-        function botMove() {
-            let moves = [];
-            let canFly = countLiveStones('black') === 3;
-            boardState.forEach((v, i) => {
-                if (v === 'black') {
-                    if (canFly) {
-                        boardState.forEach((val, target) => { if (val === null) moves.push({from: i, to: target}); });
-                    } else {
-                        adjacencyMap[i].forEach(neighbor => { if (boardState[neighbor] === null) moves.push({from: i, to: neighbor}); });
-                    }
-                }
-            });
-            if (moves.length === 0) return; 
-
-            let selectedMove = null;
-            if (botLevel >= 2) {
-                for (let m of moves) {
-                    boardState[m.to] = 'black'; boardState[m.from] = null;
-                    if (checkForMill(m.to, 'black')) selectedMove = m;
-                    boardState[m.from] = 'black'; boardState[m.to] = null;
-                    if (selectedMove) break;
+                    statusText = "Gegner ist am Zug..."; color = "#f1c40f";
                 }
             }
-            if (!selectedMove) selectedMove = moves[Math.floor(Math.random() * moves.length)];
-            performMoveStone(selectedMove.from, selectedMove.to, 'black');
+            statusElement.innerText = statusText;
+            statusElement.style.color = color;
         }
 
-        function botRemoveStone() {
-            let targets = [];
-            let protectedTargets = [];
-            boardState.forEach((v, i) => {
-                if (v === 'white') {
-                    if (checkForMill(i, 'white')) protectedTargets.push(i); else targets.push(i);
+        // --- ZUG & SCHLAG ---
+        function hasGlobalCaptureAvailable(player) {
+            if (forcedPieceIndex !== null) return true;
+            for (let i = 0; i < 64; i++) {
+                const p = board[i];
+                if (p && p.c === player) {
+                    if (canPieceJump(i, board)) return true;
                 }
-            });
-            let target = -1;
-            if (targets.length > 0) target = targets[Math.floor(Math.random() * targets.length)];
-            else if (protectedTargets.length > 0) target = protectedTargets[Math.floor(Math.random() * protectedTargets.length)];
-            if (target !== -1) performRemoveStone(target, 'black');
-        }
-
-        function findMillMove(player) {
-            let emptySpots = [];
-            boardState.forEach((v, i) => { if (v === null) emptySpots.push(i); });
-            for (let spot of emptySpots) {
-                boardState[spot] = player; 
-                if (checkForMill(spot, player)) { boardState[spot] = null; return spot; }
-                boardState[spot] = null; 
-            }
-            return -1;
-        }
-
-        // --- HELPERS ---
-        function createStoneElement(index, player) {
-            const spot = document.querySelector(`.spot[data-index='${index}']`);
-            const stone = document.createElement('div');
-            stone.classList.add('stone', player);
-            stone.style.top = spot.style.top;
-            stone.style.left = spot.style.left;
-            boardElement.appendChild(stone);
-        }
-
-        function selectStone(index) {
-            const oldSelection = document.querySelector('.stone.selected');
-            if (oldSelection) oldSelection.classList.remove('selected');
-            selectedStoneIndex = index;
-            const spot = document.querySelector(`.spot[data-index='${index}']`);
-            const allStones = document.querySelectorAll('.stone');
-            allStones.forEach(stone => {
-                if(stone.style.top === spot.style.top && stone.style.left === spot.style.left) stone.classList.add('selected');
-            });
-        }
-
-        function checkForMill(index, player) {
-            const relevantMills = millCombinations.filter(combo => combo.includes(index));
-            for (let combo of relevantMills) {
-                const [a, b, c] = combo;
-                if (boardState[a] === player && boardState[b] === player && boardState[c] === player) return true;
             }
             return false;
         }
 
-        function countLiveStones(player) { return boardState.filter(cell => cell === player).length; }
+        function canPieceJump(index, currentBoard) {
+            const piece = currentBoard[index];
+            if (!piece) return false;
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+            let directions = [];
+            if (piece.c === 'white' || piece.k) directions.push(-1);
+            if (piece.c === 'black' || piece.k) directions.push(1);
 
-        function hasPossibleMoves(player) {
-            if (countLiveStones(player) === 3) return true;
-            for (let i = 0; i < 24; i++) {
-                if (boardState[i] === player) {
-                    const neighbors = adjacencyMap[i];
-                    for (let neighbor of neighbors) { if (boardState[neighbor] === null) return true; }
+            for (let rDir of directions) {
+                for (let cDir of [-1, 1]) {
+                    const jumpRow = row + (rDir * 2);
+                    const jumpCol = col + (cDir * 2);
+                    const jumpIndex = jumpRow * 8 + jumpCol;
+                    if (isValidPos(jumpRow, jumpCol) && currentBoard[jumpIndex] === null) {
+                        const midRow = row + rDir;
+                        const midCol = col + cDir;
+                        const midIndex = midRow * 8 + midCol;
+                        const midPiece = currentBoard[midIndex];
+                        if (midPiece && midPiece.c !== piece.c) return true; 
+                    }
                 }
             }
-            return false; 
+            return false;
         }
 
-        function endGame(message, winnerColor) {
-            gameState = 'game_over';
-            statusElement.innerText = "SIEGER: " + message;
-            document.body.classList.add('game-over');
+        function handleSquareClick(index) {
+            if (!gameActive) return;
+            if (isSinglePlayer && currentPlayer !== 'white') return;
+            if (!isSinglePlayer && myColor !== currentPlayer) return;
+
+            const piece = board[index];
+
+            if (piece && piece.c === currentPlayer) {
+                if (forcedPieceIndex !== null && index !== forcedPieceIndex) return;
+                if (forcedPieceIndex === null && hasGlobalCaptureAvailable(currentPlayer)) {
+                    if (!canPieceJump(index, board)) return; 
+                }
+                selectedIndex = index;
+                calculateValidMoves(index);
+                renderBoard();
+                return;
+            }
+
+            if (!piece && selectedIndex !== null) {
+                const move = validMoves.find(m => m.target === index);
+                if (move) executeMove(move);
+            }
+        }
+
+        function calculateValidMoves(index) {
+            validMoves = [];
+            const piece = board[index];
+            if (!piece) return;
+            const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable(piece.c);
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+            let directions = [];
+            if (piece.c === 'white' || piece.k) directions.push(-1);
+            if (piece.c === 'black' || piece.k) directions.push(1);
+
+            directions.forEach(rowDir => {
+                [-1, 1].forEach(colDir => {
+                    const jumpRow = row + (rowDir * 2);
+                    const jumpCol = col + (colDir * 2);
+                    const jumpIndex = jumpRow * 8 + jumpCol;
+                    if (isValidPos(jumpRow, jumpCol) && board[jumpIndex] === null) {
+                        const midRow = row + rowDir;
+                        const midCol = col + colDir;
+                        const midIndex = midRow * 8 + midCol;
+                        const midPiece = board[midIndex];
+                        if (midPiece && midPiece.c !== piece.c) {
+                            validMoves.push({ target: jumpIndex, type: 'jump', remove: midIndex });
+                        }
+                    }
+                    if (!captureIsForced) {
+                        const targetRow = row + rowDir;
+                        const targetCol = col + colDir;
+                        const targetIndex = targetRow * 8 + targetCol;
+                        if (isValidPos(targetRow, targetCol) && board[targetIndex] === null) {
+                            validMoves.push({ target: targetIndex, type: 'move' });
+                        }
+                    }
+                });
+            });
+        }
+
+        function isValidPos(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+
+        function executeMove(move) {
+            let newBoard = [...board];
+            const piece = newBoard[selectedIndex];
             
-            if (isSinglePlayer) {
-                if (winnerColor === 'white') {
-                    if(botLevel < 5) botLevel++;
-                    localStorage.setItem('muehleBotLevel', botLevel);
-                    alert("Gewonnen! Bot Level jetzt " + botLevel);
+            newBoard[move.target] = piece;
+            newBoard[selectedIndex] = null;
+
+            const targetRow = Math.floor(move.target / 8);
+            let becameKing = false;
+            if (!piece.k && ((piece.c === 'white' && targetRow === 0) || (piece.c === 'black' && targetRow === 7))) {
+                piece.k = true;
+                becameKing = true;
+            }
+
+            let nextForcedPiece = null;
+            let nextPlayer = currentPlayer;
+
+            if (move.type === 'jump') {
+                newBoard[move.remove] = null;
+                const oldBoard = board;
+                board = newBoard; 
+                if (!becameKing && canPieceJump(move.target, newBoard)) {
+                    nextForcedPiece = move.target;
+                    nextPlayer = currentPlayer; 
                 } else {
-                    if(botLevel > 1) botLevel--;
-                    localStorage.setItem('muehleBotLevel', botLevel);
-                    alert("Verloren. Bot Level jetzt " + botLevel);
+                    nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
                 }
+                board = oldBoard; 
             } else {
-                if (myColor === winnerColor) socket.emit('reportWin', winnerColor);
+                nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
             }
+            
+            board = newBoard;
+            currentPlayer = nextPlayer;
+            forcedPieceIndex = nextForcedPiece;
+            selectedIndex = null;
+            validMoves = [];
+
+            updateUI();
+            checkWin();
+
+            if (isSinglePlayer && gameActive && currentPlayer === 'black') {
+                setTimeout(makeBotMove, 800);
+            } else if (!isSinglePlayer) {
+                socket.emit('playerAction', { board: newBoard, nextPlayer: nextPlayer, forcedPiece: nextForcedPiece });
+            }
+        }
+
+        // --- BOT ---
+        function makeBotMove() {
+            if (!gameActive || currentPlayer !== 'black') return;
+            let blackStonesIndices = [];
+            board.forEach((p, idx) => { if (p && p.c === 'black') blackStonesIndices.push(idx); });
+            let allPossibleMoves = [];
+            if (forcedPieceIndex !== null) blackStonesIndices = [forcedPieceIndex];
+            const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable('black');
+
+            blackStonesIndices.forEach(idx => {
+                const moves = getMovesForBot(idx, captureIsForced);
+                moves.forEach(m => { allPossibleMoves.push({ from: idx, move: m }); });
+            });
+
+            if (allPossibleMoves.length === 0) return; 
+            const randomPick = allPossibleMoves[Math.floor(Math.random() * allPossibleMoves.length)];
+            selectedIndex = randomPick.from; 
+            executeMove(randomPick.move);
+        }
+
+        function getMovesForBot(index, captureIsForced) {
+            let moves = [];
+            const piece = board[index];
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+            let directions = [];
+            if (piece.c === 'white' || piece.k) directions.push(-1);
+            if (piece.c === 'black' || piece.k) directions.push(1);
+
+            directions.forEach(rowDir => {
+                [-1, 1].forEach(colDir => {
+                    const jumpRow = row + (rowDir * 2);
+                    const jumpCol = col + (colDir * 2);
+                    const jumpIndex = jumpRow * 8 + jumpCol;
+                    if (isValidPos(jumpRow, jumpCol) && board[jumpIndex] === null) {
+                        const midRow = row + rowDir;
+                        const midCol = col + colDir;
+                        const midIndex = midRow * 8 + midCol;
+                        const midPiece = board[midIndex];
+                        if (midPiece && midPiece.c !== piece.c) moves.push({ target: jumpIndex, type: 'jump', remove: midIndex });
+                    }
+                    if (!captureIsForced) {
+                        const targetRow = row + rowDir;
+                        const targetCol = col + colDir;
+                        const targetIndex = targetRow * 8 + targetCol;
+                        if (isValidPos(targetRow, targetCol) && board[targetIndex] === null) moves.push({ target: targetIndex, type: 'move' });
+                    }
+                });
+            });
+            return moves;
+        }
+
+        // --- ENDE ---
+        function checkWin() {
+            const whitePieces = board.filter(p => p && p.c === 'white').length;
+            const blackPieces = board.filter(p => p && p.c === 'black').length;
+            if (whitePieces === 0) endGame('Schwarz');
+            else if (blackPieces === 0) endGame('Weiß');
+        }
+
+        function endGame(winner) {
+            gameActive = false;
+            statusElement.innerText = "SIEGER: " + winner.toUpperCase();
             restartBtn.style.display = 'block';
-        }
-
-        function switchPlayer() {
-            const allPlaced = piecesPlaced.white === 9 && piecesPlaced.black === 9;
-            if (allPlaced && gameState !== 'removing') gameState = 'moving';
-            currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
-            const opponentGerman = currentPlayer === 'white' ? 'Schwarz' : 'Weiß';
-            updateUI(); 
-            if (gameState === 'moving') {
-                const stonesCount = countLiveStones(currentPlayer);
-                if (stonesCount < 3) return endGame(`${opponentGerman} (Zu wenig Steine)`, currentPlayer === 'white' ? 'black' : 'white');
-                if (!hasPossibleMoves(currentPlayer)) return endGame(`${opponentGerman} (Blockiert)`, currentPlayer === 'white' ? 'black' : 'white');
-            } 
-            if (isSinglePlayer && currentPlayer === 'black' && gameState !== 'game_over') {
-                botTurn();
+            if (!isSinglePlayer && ((winner === 'Weiß' && myColor === 'white') || (winner === 'Schwarz' && myColor === 'black'))) {
+                socket.emit('reportWin', myColor);
             }
         }
 
-        initBoard();
+        initGame(); 
     </script>
 </body>
 </html>
