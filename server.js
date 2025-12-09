@@ -7,63 +7,83 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Bereitstellen der HTML-Dateien im Ordner 'public'
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Speicher für die Spieler
-let players = {}; // Speichert: { socketId: 'white' oder 'black' }
+// --- SPEICHER ---
+let players = {}; 
+let hallOfFame = []; 
 let activePlayerCount = 0;
 
 io.on('connection', (socket) => {
-    console.log('Ein neuer Spieler hat sich verbunden: ' + socket.id);
+    console.log('Neuer Dame-Spieler: ' + socket.id);
 
-    // Wenn schon 2 Spieler da sind, müssen wir den neuen abweisen oder zum Zuschauer machen
+    // Hall of Fame & Status sofort senden
+    socket.emit('updateHallOfFame', hallOfFame);
+    
+    // Prüfen ob voll
     if (activePlayerCount >= 2) {
-        socket.emit('spectator', true); // Sagen wir ihm, er darf nur zugucken
-    } else {
-        activePlayerCount++;
-        // Einfache Zuweisung: Erster ist Weiß, Zweiter ist Schwarz
-        // (Das verbessern wir später mit deiner Auswahl-Logik)
-        const assignedColor = activePlayerCount === 1 ? 'white' : 'black';
-        players[socket.id] = assignedColor;
-        
-        // Dem Spieler sagen, welche Farbe er hat
-        socket.emit('player-assignment', assignedColor);
-        console.log(`Spieler ${socket.id} ist jetzt ${assignedColor}`);
+        socket.emit('spectator', true);
     }
 
-    // --- EREIGNISSE VOM CLIENT EMPFANGEN ---
+    // --- EREIGNISSE ---
 
-    // Ein Spieler will einen Zug machen
-    socket.on('playerAction', (data) => {
-        // data enthält: { type: 'place'/'move'/'remove', index: 12, ... }
+    socket.on('joinGame', (playerName) => {
+        if (activePlayerCount >= 2) return;
+
+        activePlayerCount++;
+        // Standard bei Dame: Weiß beginnt unten, Schwarz oben
+        const assignedColor = activePlayerCount === 1 ? 'white' : 'black';
         
-        // Wir senden diese Aktion an ALLE Clients weiter (Broadcast)
-        // Damit bewegen sich die Steine auf beiden Bildschirmen
+        players[socket.id] = { color: assignedColor, name: playerName };
+
+        socket.emit('player-assignment', { color: assignedColor, name: playerName });
+        io.emit('updatePlayerNames', Object.values(players));
+    });
+
+    socket.on('playerAction', (data) => {
+        // Leitet Züge an alle weiter
         io.emit('updateBoard', data);
     });
 
-    // Ein Spieler startet das Spiel neu / Wählt Startspieler
+    socket.on('reportWin', (winnerColor) => {
+        let winnerName = "Unbekannt";
+        for (let id in players) {
+            if (players[id].color === winnerColor) {
+                winnerName = players[id].name;
+                break;
+            }
+        }
+
+        const entry = { 
+            name: winnerName, 
+            time: new Date().toLocaleTimeString('de-DE', {
+                hour: '2-digit', 
+                minute:'2-digit', 
+                timeZone: 'Europe/Berlin' 
+            }) 
+        };
+        
+        hallOfFame.unshift(entry); 
+        if (hallOfFame.length > 10) hallOfFame.pop(); 
+
+        io.emit('updateHallOfFame', hallOfFame);
+    });
+
     socket.on('gameStart', (startColor) => {
         io.emit('resetGame', startColor);
     });
 
-    // Wenn ein Spieler die Verbindung trennt
     socket.on('disconnect', () => {
-        console.log('Spieler getrennt: ' + socket.id);
         if (players[socket.id]) {
             activePlayerCount--;
             delete players[socket.id];
-            // Optional: Dem anderen Spieler sagen, dass der Gegner weg ist
+            io.emit('updatePlayerNames', Object.values(players)); 
             io.emit('opponentLeft');
         }
     });
 });
 
-// Server starten
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Der Mühle-Server läuft auf Port ${PORT}`);
-    console.log(`Lokal erreichbar unter: http://localhost:${PORT}`);
-    console.log(`Im Netzwerk erreichbar über deine IP-Adresse:3000`);
+    console.log(`Dame-Server läuft auf Port ${PORT}`);
 });
