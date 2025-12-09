@@ -58,7 +58,7 @@
             flex-wrap: wrap;
         }
 
-        /* DAS BRETT (Quadratisch & Stabil) */
+        /* DAS BRETT */
         #board {
             width: 500px;
             height: 500px;
@@ -66,12 +66,10 @@
             border: 15px solid var(--border-color);
             border-radius: 5px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-            
             flex-shrink: 0; 
             aspect-ratio: 1 / 1; 
-            
             z-index: 10;
-            order: 2; /* Desktop: Mitte */
+            order: 2; 
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             grid-template-rows: repeat(8, 1fr);
@@ -107,9 +105,7 @@
             flex-direction: column;
             align-items: center;
         }
-        
-        #panel-white { order: 1; }
-        #panel-black { order: 3; }
+        #panel-white { order: 1; } #panel-black { order: 3; }
 
         .side-panel.active {
             border-color: var(--highlight);
@@ -129,18 +125,15 @@
         }
         .stone.white { background: radial-gradient(circle at 30% 30%, #fff, #bbb); border: 1px solid #888; }
         .stone.black { background: radial-gradient(circle at 30% 30%, #444, #000); border: 1px solid #000; }
-        
         .stone.selected { box-shadow: 0 0 15px 5px #3498db; transform: scale(1.1); }
         .stone.must-capture { box-shadow: 0 0 15px 5px #e74c3c; animation: pulse-red 1s infinite; }
         @keyframes pulse-red { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-        
         .stone.king::after {
             content: '👑'; font-size: 1.5rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         }
 
         /* FOOTER & OVERLAYS */
         #footer-area { margin-top: 10px; text-align: center; width: 100%; display: flex; flex-direction: column; align-items: center; }
-        
         #hof-container {
             width: 90%; max-width: 400px; background: rgba(0,0,0,0.3);
             border-radius: 10px; padding: 10px; font-size: 0.9rem; margin-top: 10px;
@@ -180,14 +173,10 @@
             h1 { font-size: 1.2rem; } #status { font-size: 1rem; }
             
             #board { 
-                width: 90vw; 
-                max-width: 450px; 
-                aspect-ratio: 1 / 1; 
-                height: auto; 
-                border-width: 10px; 
-                order: 2; 
+                width: 90vw; max-width: 450px; 
+                aspect-ratio: 1 / 1; height: auto; 
+                border-width: 10px; order: 2; 
             }
-            
             .side-panel { 
                 order: 2; width: 40%; padding: 10px; 
                 display: inline-flex; min-height: 80px; 
@@ -266,7 +255,6 @@
         const nameInput = document.getElementById('player-name-input');
         const warningOverlay = document.getElementById('connection-warning');
         const restartBtn = document.getElementById('restart-btn');
-        
         const panelWhite = document.getElementById('panel-white');
         const panelBlack = document.getElementById('panel-black');
         const nameWhite = document.getElementById('name-white');
@@ -275,7 +263,6 @@
         const scoreBlackDisplay = document.getElementById('score-black');
         const hofList = document.getElementById('hof-list');
 
-        // STATE
         let isSinglePlayer = false;
         let myColor = null; 
         let currentPlayer = 'white'; 
@@ -315,7 +302,7 @@
             else socket.emit('gameStart', 'white');
         }
 
-        // --- LAYOUT HELFER (Spieler unten) ---
+        // --- LAYOUT ---
         function adjustLayoutForMobile(myColorRole) {
             if (window.innerWidth > 900) return;
             if (myColorRole === 'white') {
@@ -368,7 +355,7 @@
         });
         socket.on('opponentLeft', () => { if(!isSinglePlayer) { alert("Gegner weg."); restartBtn.style.display = 'none'; gameActive = false; } });
 
-        // --- GAME LOGIC ---
+        // --- LOGIC ---
         function initGame() {
             board = Array(64).fill(null);
             for (let i = 0; i < 24; i++) if (isDarkSquare(i)) board[i] = { c: 'black', k: false };
@@ -455,7 +442,8 @@
             statusElement.style.color = color;
         }
 
-        // --- ZUG & SCHLAG ---
+        // --- CORE LOGIC MIT FLIEGENDER DAME ---
+
         function hasGlobalCaptureAvailable(player) {
             if (forcedPieceIndex !== null) return true;
             for (let i = 0; i < 64; i++) {
@@ -468,29 +456,8 @@
         }
 
         function canPieceJump(index, currentBoard) {
-            const piece = currentBoard[index];
-            if (!piece) return false;
-            const row = Math.floor(index / 8);
-            const col = index % 8;
-            let directions = [];
-            if (piece.c === 'white' || piece.k) directions.push(-1);
-            if (piece.c === 'black' || piece.k) directions.push(1);
-
-            for (let rDir of directions) {
-                for (let cDir of [-1, 1]) {
-                    const jumpRow = row + (rDir * 2);
-                    const jumpCol = col + (cDir * 2);
-                    const jumpIndex = jumpRow * 8 + jumpCol;
-                    if (isValidPos(jumpRow, jumpCol) && currentBoard[jumpIndex] === null) {
-                        const midRow = row + rDir;
-                        const midCol = col + cDir;
-                        const midIndex = midRow * 8 + midCol;
-                        const midPiece = currentBoard[midIndex];
-                        if (midPiece && midPiece.c !== piece.c) return true; 
-                    }
-                }
-            }
-            return false;
+            const moves = getMovesForPiece(index, currentBoard, true); // True = nur Jumps prüfen
+            return moves.some(m => m.type === 'jump');
         }
 
         function handleSquareClick(index) {
@@ -506,7 +473,12 @@
                     if (!canPieceJump(index, board)) return; 
                 }
                 selectedIndex = index;
-                calculateValidMoves(index);
+                validMoves = getMovesForPiece(index, board, false);
+                // Filter: Wenn Schlagzwang, nur Schläge erlauben
+                const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable(piece.c);
+                if (captureIsForced) {
+                    validMoves = validMoves.filter(m => m.type === 'jump');
+                }
                 renderBoard();
                 return;
             }
@@ -517,44 +489,100 @@
             }
         }
 
-        function calculateValidMoves(index) {
-            validMoves = [];
-            const piece = board[index];
-            if (!piece) return;
-            const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable(piece.c);
+        // Die neue mächtige Funktion für Dame & Bauern
+        function getMovesForPiece(index, currentBoard, jumpsOnly) {
+            let moves = [];
+            const piece = currentBoard[index];
+            if (!piece) return moves;
+
             const row = Math.floor(index / 8);
             const col = index % 8;
-            let directions = [];
-            if (piece.c === 'white' || piece.k) directions.push(-1);
-            if (piece.c === 'black' || piece.k) directions.push(1);
+            
+            // Richtungen
+            let dirs = [];
+            if (piece.k) {
+                dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; // Dame: Alle Richtungen
+            } else {
+                // Bauer
+                if (piece.c === 'white') dirs = [[-1, -1], [-1, 1]]; // Weiß nach oben
+                else dirs = [[1, -1], [1, 1]]; // Schwarz nach unten
+                
+                // Bauern können rückwärts schlagen! Also fürs Schlagen alle Richtungen checken
+                if (jumpsOnly || hasGlobalCaptureAvailable(piece.c)) {
+                     dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+                }
+            }
 
-            directions.forEach(rowDir => {
-                [-1, 1].forEach(colDir => {
-                    const jumpRow = row + (rowDir * 2);
-                    const jumpCol = col + (colDir * 2);
-                    const jumpIndex = jumpRow * 8 + jumpCol;
-                    if (isValidPos(jumpRow, jumpCol) && board[jumpIndex] === null) {
-                        const midRow = row + rowDir;
-                        const midCol = col + colDir;
-                        const midIndex = midRow * 8 + midCol;
-                        const midPiece = board[midIndex];
-                        if (midPiece && midPiece.c !== piece.c) {
-                            validMoves.push({ target: jumpIndex, type: 'jump', remove: midIndex });
+            for (let d of dirs) {
+                const rDir = d[0];
+                const cDir = d[1];
+                let dist = 1;
+
+                while (true) {
+                    const tRow = row + (rDir * dist);
+                    const tCol = col + (cDir * dist);
+                    const tIdx = tRow * 8 + tCol;
+
+                    if (tRow < 0 || tRow > 7 || tCol < 0 || tCol > 7) break; // Rand erreicht
+
+                    const targetContent = currentBoard[tIdx];
+
+                    // --- FALL A: Leeres Feld ---
+                    if (targetContent === null) {
+                        if (!jumpsOnly && !piece.k && dist === 1) {
+                            // Bauer darf 1 Schritt auf leeres Feld
+                            // Aber nur in Laufrichtung! (Rückwärtszug nur beim Schlagen erlaubt)
+                            let isForward = false;
+                            if(piece.c === 'white' && rDir === -1) isForward = true;
+                            if(piece.c === 'black' && rDir === 1) isForward = true;
+                            
+                            if(isForward) moves.push({ target: tIdx, type: 'move' });
                         }
-                    }
-                    if (!captureIsForced) {
-                        const targetRow = row + rowDir;
-                        const targetCol = col + colDir;
-                        const targetIndex = targetRow * 8 + targetCol;
-                        if (isValidPos(targetRow, targetCol) && board[targetIndex] === null) {
-                            validMoves.push({ target: targetIndex, type: 'move' });
+                        else if (!jumpsOnly && piece.k) {
+                            // Dame darf auf jedes leere Feld rutschen
+                            moves.push({ target: tIdx, type: 'move' });
                         }
+                        
+                        // Wenn Dame, weiter scannen (rutschen)
+                        if (piece.k) { dist++; continue; }
+                        else break; // Bauer stoppt nach 1 Schritt
                     }
-                });
-            });
+
+                    // --- FALL B: Eigener Stein ---
+                    if (targetContent.c === piece.c) break; // Blockiert
+
+                    // --- FALL C: Gegner (Möglicher Schlag) ---
+                    if (targetContent.c !== piece.c) {
+                        // Wir müssen schauen, ob dahinter Platz ist
+                        // Für Bauern: Genau 1 Feld dahinter
+                        // Für Dame: Jedes freie Feld dahinter
+                        
+                        let jumpDist = 1;
+                        while (true) {
+                            const landRow = tRow + (rDir * jumpDist);
+                            const landCol = tCol + (cDir * jumpDist);
+                            const landIdx = landRow * 8 + landCol;
+
+                            if (landRow < 0 || landRow > 7 || landCol < 0 || landCol > 7) break; // Rand
+                            
+                            if (currentBoard[landIdx] === null) {
+                                // Treffer! Sprung möglich
+                                moves.push({ target: landIdx, type: 'jump', remove: tIdx });
+                                
+                                // Dame darf nach dem Gegner noch weiter rutschen
+                                if (piece.k) { jumpDist++; continue; }
+                                else break; // Bauer landet direkt dahinter
+                            } else {
+                                // Feld hinter Gegner ist besetzt -> Kein Sprung
+                                break; 
+                            }
+                        }
+                        break; // Nach dem Gegner-Check brechen wir diese Richtung ab (man kann nicht 2 Gegner direkt hintereinander springen ohne Landung)
+                    }
+                }
+            }
+            return moves;
         }
-
-        function isValidPos(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
 
         function executeMove(move) {
             let newBoard = [...board];
@@ -565,6 +593,7 @@
 
             const targetRow = Math.floor(move.target / 8);
             let becameKing = false;
+            // Dame werden
             if (!piece.k && ((piece.c === 'white' && targetRow === 0) || (piece.c === 'black' && targetRow === 7))) {
                 piece.k = true;
                 becameKing = true;
@@ -575,8 +604,12 @@
 
             if (move.type === 'jump') {
                 newBoard[move.remove] = null;
+                // Temporärer Board Check für Kettenzug
                 const oldBoard = board;
                 board = newBoard; 
+                
+                // Kann derselbe Stein nochmal schlagen?
+                // Wenn er Dame wurde, endet der Zug in den meisten Regeln sofort.
                 if (!becameKing && canPieceJump(move.target, newBoard)) {
                     nextForcedPiece = move.target;
                     nextPlayer = currentPlayer; 
@@ -614,7 +647,8 @@
             const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable('black');
 
             blackStonesIndices.forEach(idx => {
-                const moves = getMovesForBot(idx, captureIsForced);
+                let moves = getMovesForPiece(idx, board, false);
+                if (captureIsForced) moves = moves.filter(m => m.type === 'jump');
                 moves.forEach(m => { allPossibleMoves.push({ from: idx, move: m }); });
             });
 
@@ -624,39 +658,6 @@
             executeMove(randomPick.move);
         }
 
-        function getMovesForBot(index, captureIsForced) {
-            let moves = [];
-            const piece = board[index];
-            const row = Math.floor(index / 8);
-            const col = index % 8;
-            let directions = [];
-            if (piece.c === 'white' || piece.k) directions.push(-1);
-            if (piece.c === 'black' || piece.k) directions.push(1);
-
-            directions.forEach(rowDir => {
-                [-1, 1].forEach(colDir => {
-                    const jumpRow = row + (rowDir * 2);
-                    const jumpCol = col + (colDir * 2);
-                    const jumpIndex = jumpRow * 8 + jumpCol;
-                    if (isValidPos(jumpRow, jumpCol) && board[jumpIndex] === null) {
-                        const midRow = row + rowDir;
-                        const midCol = col + colDir;
-                        const midIndex = midRow * 8 + midCol;
-                        const midPiece = board[midIndex];
-                        if (midPiece && midPiece.c !== piece.c) moves.push({ target: jumpIndex, type: 'jump', remove: midIndex });
-                    }
-                    if (!captureIsForced) {
-                        const targetRow = row + rowDir;
-                        const targetCol = col + colDir;
-                        const targetIndex = targetRow * 8 + targetCol;
-                        if (isValidPos(targetRow, targetCol) && board[targetIndex] === null) moves.push({ target: targetIndex, type: 'move' });
-                    }
-                });
-            });
-            return moves;
-        }
-
-        // --- ENDE ---
         function checkWin() {
             const whitePieces = board.filter(p => p && p.c === 'white').length;
             const blackPieces = board.filter(p => p && p.c === 'black').length;
