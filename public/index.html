@@ -36,12 +36,8 @@
 
         /* HEADER */
         #header-area {
-            text-align: center;
-            width: 100%;
-            pointer-events: none; 
-            margin-bottom: 20px;
-            position: relative;
-            z-index: 50;
+            text-align: center; width: 100%; pointer-events: none; 
+            margin-bottom: 20px; position: relative; z-index: 50;
         }
         h1 { margin: 0; font-size: 1.5rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); pointer-events: auto;}
         #my-role { font-size: 0.9rem; color: #bdc3c7; margin-bottom: 5px;}
@@ -49,31 +45,32 @@
 
         /* HAUPT LAYOUT */
         #main-stage {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 40px;
-            width: 100%;
-            max-width: 900px;
-            flex-wrap: wrap;
+            display: flex; align-items: center; justify-content: center;
+            gap: 40px; width: 100%; max-width: 900px; flex-wrap: wrap;
         }
 
         /* DAS BRETT */
         #board {
-            width: 500px;
-            height: 500px;
+            width: 500px; height: 500px;
             background-color: var(--border-color);
             border: 15px solid var(--border-color);
             border-radius: 5px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-            flex-shrink: 0; 
-            aspect-ratio: 1 / 1; 
-            z-index: 10;
-            order: 2; 
+            flex-shrink: 0; aspect-ratio: 1 / 1; 
+            z-index: 10; order: 2; 
             display: grid;
             grid-template-columns: repeat(8, 1fr);
             grid-template-rows: repeat(8, 1fr);
+            transition: transform 0.5s ease; /* Weiche Drehung */
         }
+
+        /* DREHUNG FÜR SCHWARZ */
+        #board.rotate-180 { transform: rotate(180deg); }
+        /* Damit Steine/Kronen nicht auf dem Kopf stehen, drehen wir sie zurück */
+        #board.rotate-180 .square .stone { transform: rotate(180deg); } 
+        /* Bei Selected muss man aufpassen, dass Scale und Rotate kombiniert werden */
+        #board.rotate-180 .square .stone.selected { transform: rotate(180deg) scale(1.1); }
+        #board.rotate-180 .square .stone.must-capture { animation: pulse-red-rotated 1s infinite; }
 
         .square {
             width: 100%; height: 100%; position: relative;
@@ -93,25 +90,15 @@
 
         /* PANELS */
         .side-panel {
-            width: 140px;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            border: 2px solid transparent;
-            transition: all 0.3s;
-            opacity: 0.6;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            width: 140px; background: rgba(0, 0, 0, 0.3); padding: 15px;
+            border-radius: 10px; text-align: center; border: 2px solid transparent;
+            transition: all 0.3s; opacity: 0.6; display: flex; flex-direction: column; align-items: center;
         }
         #panel-white { order: 1; } #panel-black { order: 3; }
 
         .side-panel.active {
-            border-color: var(--highlight);
-            background: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 0 20px rgba(241, 196, 15, 0.3);
-            opacity: 1; transform: scale(1.05);
+            border-color: var(--highlight); background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 20px rgba(241, 196, 15, 0.3); opacity: 1; transform: scale(1.05);
         }
         .player-name { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; display: block; word-wrap: break-word;}
         .captured-count { font-size: 2rem; font-weight: bold; color: #aaa; margin-top: 5px; }
@@ -125,9 +112,13 @@
         }
         .stone.white { background: radial-gradient(circle at 30% 30%, #fff, #bbb); border: 1px solid #888; }
         .stone.black { background: radial-gradient(circle at 30% 30%, #444, #000); border: 1px solid #000; }
+        
         .stone.selected { box-shadow: 0 0 15px 5px #3498db; transform: scale(1.1); }
         .stone.must-capture { box-shadow: 0 0 15px 5px #e74c3c; animation: pulse-red 1s infinite; }
+        
         @keyframes pulse-red { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pulse-red-rotated { 0% { transform: rotate(180deg) scale(1); } 50% { transform: rotate(180deg) scale(1.1); } 100% { transform: rotate(180deg) scale(1); } }
+
         .stone.king::after {
             content: '👑'; font-size: 1.5rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         }
@@ -144,12 +135,7 @@
         .hof-name { font-weight: bold; color: white;}
         .hof-time { font-size: 0.8rem; color: #aaa; }
 
-        /* VERSION TAG */
-        #version-tag {
-            position: fixed; bottom: 5px; right: 5px;
-            font-size: 0.7rem; color: rgba(255,255,255,0.3);
-            pointer-events: none; z-index: 100;
-        }
+        #version-tag { position: fixed; bottom: 5px; right: 5px; font-size: 0.7rem; color: rgba(255,255,255,0.3); pointer-events: none; z-index: 100; }
 
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -203,7 +189,7 @@
 </head>
 <body>
 
-    <div id="version-tag">v1.5</div>
+    <div id="version-tag">v1.6 (Final Fix)</div>
 
     <div id="connection-warning" class="overlay" style="display:none; z-index: 2000;">
         <div class="box" style="border-color: #e74c3c;">
@@ -276,13 +262,12 @@
         let isSinglePlayer = false;
         let myColor = null; 
         let currentPlayer = 'white'; 
-        let gameActive = false;
+        let gameActive = false; // HIER: Standardmäßig false!
         let board = Array(64).fill(null);
         let selectedIndex = null;
         let validMoves = []; 
         let forcedPieceIndex = null; 
         
-        // BOT STATE
         let botLevel = parseInt(localStorage.getItem('dameBotLevel')) || 1; 
 
         // --- CONNECT ---
@@ -296,6 +281,8 @@
             isSinglePlayer = false;
             socket.emit('joinGame', name);
             startOverlay.style.display = 'none';
+            // WICHTIG: gameActive bleibt false, bis Server Start sendet
+            updateUI(); 
         }
 
         function startBotGame() {
@@ -306,24 +293,34 @@
             nameBlack.innerText = `Computer (Lvl ${botLevel})`;
             startOverlay.style.display = 'none';
             roleElement.innerText = "Einzelspieler gegen Computer";
-            adjustLayoutForMobile('white');
+            // Keine Rotation im Bot-Spiel nötig, da ich immer Weiß bin (außer wir wollten Bot = Schwarz unten, aber das macht keinen Sinn)
+            // Wenn ich Weiß bin, ist Weiß unten. Standard.
             initGame();
         }
 
         function handleRestart() {
             if (isSinglePlayer) initGame();
-            else socket.emit('gameStart', 'white');
+            else socket.emit('requestRestart');
         }
 
-        // --- LAYOUT ---
-        function adjustLayoutForMobile(myColorRole) {
-            if (window.innerWidth > 900) return;
-            if (myColorRole === 'white') {
-                panelWhite.style.order = '3'; panelBlack.style.order = '1';
-            } else if (myColorRole === 'black') {
-                panelBlack.style.order = '3'; panelWhite.style.order = '1';
+        // --- ROTATION & LAYOUT HELFER ---
+        function applyBoardRotation(playerColor) {
+            // Wenn ich Schwarz bin, drehe das Brett um 180 Grad
+            if (playerColor === 'black') {
+                boardElement.classList.add('rotate-180');
             } else {
+                boardElement.classList.remove('rotate-180');
+            }
+            adjustLayoutForMobile(playerColor);
+        }
+
+        function adjustLayoutForMobile(playerColor) {
+            if (window.innerWidth > 900) return;
+            // Eigene Farbe immer unten
+            if (playerColor === 'white') {
                 panelWhite.style.order = '3'; panelBlack.style.order = '1';
+            } else if (playerColor === 'black') {
+                panelBlack.style.order = '3'; panelWhite.style.order = '1';
             }
         }
 
@@ -332,21 +329,26 @@
             if(isSinglePlayer) return;
             myColor = data.color;
             roleElement.innerText = `Du bist: ${data.name} (${data.color === 'white' ? 'WEISS' : 'SCHWARZ'})`;
-            adjustLayoutForMobile(myColor);
+            applyBoardRotation(myColor); // Hier passiert die Drehung
         });
+        
         socket.on('spectator', () => {
             if(isSinglePlayer) return;
             myColor = 'spectator';
             roleElement.innerText = "Zuschauer";
             startOverlay.style.display = 'none';
-            adjustLayoutForMobile('spectator');
         });
+
         socket.on('updatePlayerNames', (players) => {
             if(isSinglePlayer) return;
             nameWhite.innerText = "-"; nameBlack.innerText = "-";
-            players.forEach(p => { if (p.color === 'white') nameWhite.innerText = p.name; if (p.color === 'black') nameBlack.innerText = p.name; });
-            if (players.length === 2 && !gameActive) socket.emit('gameStart', 'white');
+            players.forEach(p => { 
+                if (p.color === 'white') nameWhite.innerText = p.name; 
+                if (p.color === 'black') nameBlack.innerText = p.name; 
+            });
+            // HIER: Nicht mehr automatisch starten! Warten auf Server Signal 'gameStart'
         });
+
         socket.on('updateHallOfFame', (list) => {
             hofList.innerHTML = '';
             if (list.length === 0) { hofList.innerHTML = '<li><span class="hof-name">-</span></li>'; return; }
@@ -356,7 +358,19 @@
                 hofList.appendChild(li);
             });
         });
-        socket.on('resetGame', () => { if(!isSinglePlayer) initGame(); });
+
+        // DAS STARTSIGNAL VOM SERVER
+        socket.on('gameStart', (startColor) => { 
+            if(!isSinglePlayer) { 
+                initGame(); // Setzt gameActive auf true
+                updateUI();
+            } 
+        });
+
+        socket.on('resetGame', (startColor) => { 
+            if(!isSinglePlayer) initGame(); 
+        });
+
         socket.on('updateBoard', (data) => {
             if(!isSinglePlayer) {
                 board = data.board;
@@ -366,7 +380,8 @@
                 checkWin();
             }
         });
-        socket.on('opponentLeft', () => { if(!isSinglePlayer) { alert("Gegner weg."); restartBtn.style.display = 'none'; gameActive = false; } });
+
+        socket.on('opponentLeft', () => { if(!isSinglePlayer) { alert("Gegner weg."); restartBtn.style.display = 'none'; gameActive = false; updateUI(); } });
 
         // --- GAME LOGIC ---
         function initGame() {
@@ -380,7 +395,7 @@
             
             if(isSinglePlayer) nameBlack.innerText = `Computer (Lvl ${botLevel})`;
             
-            renderBoard();
+            renderBoard(); // Initiale Ansicht
             updateUI();
         }
 
@@ -392,6 +407,17 @@
 
         function renderBoard() {
             boardElement.innerHTML = '';
+            // Wenn Spiel nicht aktiv, nichts rendern oder leeres Brett
+            if (!gameActive && board.every(x => x === null)) {
+                // Leeres Grid rendern
+                for(let i=0; i<64; i++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square', isDarkSquare(i) ? 'dark' : 'light');
+                    boardElement.appendChild(square);
+                }
+                return;
+            }
+
             const captureIsForced = hasGlobalCaptureAvailable(currentPlayer);
 
             board.forEach((piece, index) => {
@@ -407,9 +433,8 @@
                     if (piece.k) stone.classList.add('king');
                     if (index === selectedIndex) stone.classList.add('selected');
                     
-                    if (currentPlayer === myColor || isSinglePlayer) {
+                    if (gameActive && (currentPlayer === myColor || isSinglePlayer)) {
                         if (captureIsForced && canPieceJump(index, board)) stone.classList.add('must-capture');
-                        if (forcedPieceIndex !== null && index === forcedPieceIndex) stone.classList.add('must-capture');
                     }
                     square.appendChild(stone);
                 }
@@ -432,35 +457,47 @@
         }
 
         function updateUI() {
-            renderBoard();
+            // Panels aktivieren
             if (currentPlayer === 'white') { panelWhite.classList.add('active'); panelBlack.classList.remove('active'); } 
             else { panelWhite.classList.remove('active'); panelBlack.classList.add('active'); }
 
+            // Status Text
             let statusText = "";
             let color = "#fff";
 
-            if (isSinglePlayer) {
-                if (currentPlayer === 'white') {
-                    statusText = forcedPieceIndex !== null ? "WEITER SCHLAGEN!" : "Du bist am Zug";
-                    color = forcedPieceIndex !== null ? "#e74c3c" : "#2ecc71";
-                } else {
-                    statusText = "Computer denkt nach..."; color = "#f1c40f";
-                }
+            if (!gameActive) {
+                statusText = "Warte auf Gegner...";
+                color = "#f1c40f";
+                // Falls Bot spiel oder Online und noch keiner da
+                if (isSinglePlayer) statusText = "Bereite Bot vor...";
             } else {
-                if (myColor === currentPlayer) {
-                    statusText = forcedPieceIndex !== null ? "WEITER SCHLAGEN!" : "Du bist am Zug";
-                    color = forcedPieceIndex !== null ? "#e74c3c" : "#2ecc71";
+                // Spiel läuft
+                if (isSinglePlayer) {
+                    if (currentPlayer === 'white') {
+                        statusText = forcedPieceIndex !== null ? "WEITER SCHLAGEN!" : "Du bist am Zug";
+                        color = forcedPieceIndex !== null ? "#e74c3c" : "#2ecc71";
+                    } else {
+                        statusText = "Computer denkt nach..."; color = "#f1c40f";
+                    }
                 } else {
-                    statusText = "Gegner ist am Zug..."; color = "#f1c40f";
+                    // Multiplayer
+                    if (myColor === currentPlayer) {
+                        statusText = forcedPieceIndex !== null ? "WEITER SCHLAGEN!" : "Du bist am Zug";
+                        color = forcedPieceIndex !== null ? "#e74c3c" : "#2ecc71";
+                    } else {
+                        statusText = "Gegner ist am Zug..."; color = "#f1c40f";
+                    }
                 }
             }
             statusElement.innerText = statusText;
             statusElement.style.color = color;
+            
+            // Brett neu zeichnen (wichtig für Markierungen)
+            renderBoard();
         }
 
         // --- ZUG & SCHLAG ---
         function hasGlobalCaptureAvailable(player) {
-            if (forcedPieceIndex !== null) return true;
             for (let i = 0; i < 64; i++) {
                 const p = board[i];
                 if (p && p.c === player) {
@@ -475,11 +512,9 @@
             return moves.some(m => m.type === 'jump');
         }
 
-        // Blockade Check
         function canPlayerMove(player) {
             if (forcedPieceIndex !== null) return true; 
             const captureIsForced = hasGlobalCaptureAvailable(player);
-            
             for (let i = 0; i < 64; i++) {
                 if (board[i] && board[i].c === player) {
                     let moves = getMovesForPiece(i, board, false);
@@ -498,13 +533,12 @@
             const piece = board[index];
 
             if (piece && piece.c === currentPlayer) {
-                if (forcedPieceIndex !== null && index !== forcedPieceIndex) return;
-                if (forcedPieceIndex === null && hasGlobalCaptureAvailable(currentPlayer)) {
+                if (hasGlobalCaptureAvailable(currentPlayer)) {
                     if (!canPieceJump(index, board)) return; 
                 }
                 selectedIndex = index;
                 validMoves = getMovesForPiece(index, board, false);
-                const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable(piece.c);
+                const captureIsForced = hasGlobalCaptureAvailable(piece.c);
                 if (captureIsForced) {
                     validMoves = validMoves.filter(m => m.type === 'jump');
                 }
@@ -530,7 +564,6 @@
             if (piece.k) {
                 dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; 
             } else {
-                // REGEL: Bauern nur vorwärts
                 if (piece.c === 'white') dirs = [[-1, -1], [-1, 1]]; 
                 else dirs = [[1, -1], [1, 1]]; 
             }
@@ -595,34 +628,21 @@
 
             const targetRow = Math.floor(move.target / 8);
             let becameKing = false;
-            // Dame werden
             if (!piece.k && ((piece.c === 'white' && targetRow === 0) || (piece.c === 'black' && targetRow === 7))) {
                 piece.k = true;
                 becameKing = true;
             }
 
-            let nextForcedPiece = null;
-            let nextPlayer = currentPlayer;
-
             if (move.type === 'jump') {
                 newBoard[move.remove] = null;
-                const oldBoard = board;
-                board = newBoard; 
-                // KETTENSCHLAG REGEL: Wenn der *gleiche* Stein nochmal schlagen kann -> Weiter
-                if (!becameKing && canPieceJump(move.target, newBoard)) {
-                    nextForcedPiece = move.target;
-                    nextPlayer = currentPlayer; 
-                } else {
-                    nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
-                }
-                board = oldBoard; 
-            } else {
-                nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
+                // Single Jump Regel: Zug endet nach Schlag
             }
+            
+            const nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
             
             board = newBoard;
             currentPlayer = nextPlayer;
-            forcedPieceIndex = nextForcedPiece;
+            forcedPieceIndex = null;
             selectedIndex = null;
             validMoves = [];
 
@@ -632,7 +652,7 @@
             if (isSinglePlayer && gameActive && currentPlayer === 'black') {
                 setTimeout(makeBotMove, 800);
             } else if (!isSinglePlayer) {
-                socket.emit('playerAction', { board: newBoard, nextPlayer: nextPlayer, forcedPiece: nextForcedPiece });
+                socket.emit('playerAction', { board: newBoard, nextPlayer: nextPlayer, forcedPiece: null });
             }
         }
 
@@ -643,8 +663,7 @@
             board.forEach((p, idx) => { if (p && p.c === 'black') blackStonesIndices.push(idx); });
             
             let allPossibleMoves = [];
-            if (forcedPieceIndex !== null) blackStonesIndices = [forcedPieceIndex];
-            const captureIsForced = (forcedPieceIndex !== null) || hasGlobalCaptureAvailable('black');
+            const captureIsForced = hasGlobalCaptureAvailable('black');
 
             blackStonesIndices.forEach(idx => {
                 let moves = getMovesForPiece(idx, board, false);
@@ -695,7 +714,6 @@
             if (whitePieces === 0) return endGame('Schwarz');
             else if (blackPieces === 0) return endGame('Weiß');
 
-            // Blockade Check
             if (!canPlayerMove(currentPlayer)) {
                 endGame(currentPlayer === 'white' ? 'Schwarz' : 'Weiß');
             }
@@ -727,7 +745,8 @@
             }
         }
 
-        initGame(); 
+        // Nur leeres Brett am Anfang
+        renderBoard();
     </script>
 </body>
 </html>
