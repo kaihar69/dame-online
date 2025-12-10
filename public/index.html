@@ -203,7 +203,7 @@
 </head>
 <body>
 
-    <div id="version-tag">v1.3</div>
+    <div id="version-tag">v1.5</div>
 
     <div id="connection-warning" class="overlay" style="display:none; z-index: 2000;">
         <div class="box" style="border-color: #e74c3c;">
@@ -280,7 +280,7 @@
         let board = Array(64).fill(null);
         let selectedIndex = null;
         let validMoves = []; 
-        let forcedPieceIndex = null;
+        let forcedPieceIndex = null; 
         
         // BOT STATE
         let botLevel = parseInt(localStorage.getItem('dameBotLevel')) || 1; 
@@ -475,19 +475,19 @@
             return moves.some(m => m.type === 'jump');
         }
 
-        // NEU: Prüft ob Spieler überhaupt noch ziehen kann
+        // Blockade Check
         function canPlayerMove(player) {
-            if (forcedPieceIndex !== null) return true; // Wer mitten im Sprung ist, kann ziehen
+            if (forcedPieceIndex !== null) return true; 
             const captureIsForced = hasGlobalCaptureAvailable(player);
             
             for (let i = 0; i < 64; i++) {
                 if (board[i] && board[i].c === player) {
                     let moves = getMovesForPiece(i, board, false);
                     if (captureIsForced) moves = moves.filter(m => m.type === 'jump');
-                    if (moves.length > 0) return true; // Sobald ein Zug gefunden wird -> Ja
+                    if (moves.length > 0) return true; 
                 }
             }
-            return false; // Keine Züge gefunden
+            return false; 
         }
 
         function handleSquareClick(index) {
@@ -530,6 +530,7 @@
             if (piece.k) {
                 dirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; 
             } else {
+                // REGEL: Bauern nur vorwärts
                 if (piece.c === 'white') dirs = [[-1, -1], [-1, 1]]; 
                 else dirs = [[1, -1], [1, 1]]; 
             }
@@ -548,7 +549,6 @@
 
                     const targetContent = currentBoard[tIdx];
 
-                    // Leeres Feld
                     if (targetContent === null) {
                         if (!jumpsOnly && !piece.k && dist === 1) {
                             moves.push({ target: tIdx, type: 'move' });
@@ -560,10 +560,8 @@
                         else break; 
                     }
 
-                    // Eigener Stein
                     if (targetContent.c === piece.c) break; 
 
-                    // Gegner (Schlag)
                     if (targetContent.c !== piece.c) {
                         let jumpDist = 1;
                         while (true) {
@@ -597,6 +595,7 @@
 
             const targetRow = Math.floor(move.target / 8);
             let becameKing = false;
+            // Dame werden
             if (!piece.k && ((piece.c === 'white' && targetRow === 0) || (piece.c === 'black' && targetRow === 7))) {
                 piece.k = true;
                 becameKing = true;
@@ -609,6 +608,7 @@
                 newBoard[move.remove] = null;
                 const oldBoard = board;
                 board = newBoard; 
+                // KETTENSCHLAG REGEL: Wenn der *gleiche* Stein nochmal schlagen kann -> Weiter
                 if (!becameKing && canPieceJump(move.target, newBoard)) {
                     nextForcedPiece = move.target;
                     nextPlayer = currentPlayer; 
@@ -652,10 +652,7 @@
                 moves.forEach(m => { allPossibleMoves.push({ from: idx, move: m }); });
             });
 
-            if (allPossibleMoves.length === 0) {
-                // Keine Züge? Blockade wird in checkWin erkannt, aber sicherheitshalber hier nichts tun
-                return; 
-            }
+            if (allPossibleMoves.length === 0) return; 
 
             // Scoring
             let bestMove = null;
@@ -695,14 +692,11 @@
             const whitePieces = board.filter(p => p && p.c === 'white').length;
             const blackPieces = board.filter(p => p && p.c === 'black').length;
             
-            // Standard Gewinn: Keine Steine mehr
             if (whitePieces === 0) return endGame('Schwarz');
             else if (blackPieces === 0) return endGame('Weiß');
 
-            // Neu: Blockade Check
-            // Kann der Spieler, der jetzt dran ist, ziehen?
+            // Blockade Check
             if (!canPlayerMove(currentPlayer)) {
-                // Wenn Weiß dran ist und nicht ziehen kann -> Schwarz gewinnt
                 endGame(currentPlayer === 'white' ? 'Schwarz' : 'Weiß');
             }
         }
